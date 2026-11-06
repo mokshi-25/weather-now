@@ -1,5 +1,6 @@
 const cityInput = document.getElementById('city');
 const searchBtn = document.getElementById('search-btn');
+const locBtn = document.getElementById('loc-btn');
 const message = document.getElementById('message');
 const currentBox = document.getElementById('current');
 const forecastBox = document.getElementById('forecast');
@@ -30,48 +31,103 @@ function showMessage(text, isError) {
   message.className = isError ? 'message error' : 'message';
 }
 
+function clearResults() {
+  currentBox.replaceChildren();
+  forecastBox.replaceChildren();
+}
+
+// Get the weather for a place that has latitude and longitude
+async function showWeather(place) {
+  const weatherUrl =
+    'https://api.open-meteo.com/v1/forecast' +
+    '?latitude=' + place.latitude +
+    '&longitude=' + place.longitude +
+    '&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code' +
+    '&daily=weather_code,temperature_2m_max,temperature_2m_min' +
+    '&timezone=auto';
+
+  const weatherRes = await fetch(weatherUrl);
+  const data = await weatherRes.json();
+
+  showMessage('', false);
+  renderCurrent(place, data.current);
+  renderForecast(data.daily);
+}
+
+// Search by city name
 async function loadWeather() {
-  const name = cityInput.value.trim();
+  // Use only the part before a comma, so "Narpala, Andhra Pradesh" becomes "Narpala"
+  const name = cityInput.value.split(',')[0].trim();
   if (!name) {
     showMessage('Please type a city name.', true);
     return;
   }
 
   showMessage('Loading...', false);
-  currentBox.replaceChildren();
-  forecastBox.replaceChildren();
+  clearResults();
 
   try {
-    // Step 1: turn the city name into latitude and longitude
     const geoUrl = 'https://geocoding-api.open-meteo.com/v1/search?count=1&name=' + encodeURIComponent(name);
     const geoRes = await fetch(geoUrl);
     const geo = await geoRes.json();
 
     if (!geo.results || geo.results.length === 0) {
-      showMessage('City not found. Check the spelling and try again.', true);
+      showMessage('City not found. Try a bigger nearby city, or check the spelling.', true);
       return;
     }
 
-    const place = geo.results[0];
-
-    // Step 2: get the weather for that place
-    const weatherUrl =
-      'https://api.open-meteo.com/v1/forecast' +
-      '?latitude=' + place.latitude +
-      '&longitude=' + place.longitude +
-      '&current=temperature_2m,relative_humidity_2m,apparent_temperature,wind_speed_10m,weather_code' +
-      '&daily=weather_code,temperature_2m_max,temperature_2m_min' +
-      '&timezone=auto';
-
-    const weatherRes = await fetch(weatherUrl);
-    const data = await weatherRes.json();
-
-    showMessage('', false);
-    renderCurrent(place, data.current);
-    renderForecast(data.daily);
+    await showWeather(geo.results[0]);
   } catch (err) {
     showMessage('Something went wrong. Check your internet and try again.', true);
   }
+}
+
+// Use the device location
+function loadMyLocation() {
+  if (!navigator.geolocation) {
+    showMessage('Your browser does not support location.', true);
+    return;
+  }
+
+  showMessage('Finding your location... Click Allow if the browser asks.', false);
+  clearResults();
+
+  navigator.geolocation.getCurrentPosition(
+    async function (pos) {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      let placeName = 'Your location';
+      let country = '';
+
+      // Try to find the town name for these coordinates (free service, no key)
+      try {
+        const nameUrl =
+          'https://api.bigdatacloud.net/data/reverse-geocode-client?localityLanguage=en' +
+          '&latitude=' + lat + '&longitude=' + lon;
+        const nameRes = await fetch(nameUrl);
+        const nameData = await nameRes.json();
+        placeName = nameData.city || nameData.locality || placeName;
+        country = nameData.countryName || '';
+      } catch (e) {
+        // If this fails we just show "Your location"
+      }
+
+      try {
+        await showWeather({ name: placeName, country: country, latitude: lat, longitude: lon });
+        cityInput.value = placeName === 'Your location' ? '' : placeName;
+      } catch (err) {
+        showMessage('Could not load the weather. Try again.', true);
+      }
+    },
+    function (error) {
+      if (error.code === 1) {
+        showMessage('Location was blocked. Click the lock icon next to the web address, allow Location, and try again.', true);
+      } else {
+        showMessage('Could not get your location. Try again or type a city.', true);
+      }
+    },
+    { timeout: 10000 }
+  );
 }
 
 function renderCurrent(place, current) {
@@ -109,6 +165,7 @@ function renderForecast(daily) {
 }
 
 searchBtn.addEventListener('click', loadWeather);
+locBtn.addEventListener('click', loadMyLocation);
 cityInput.addEventListener('keydown', function (e) {
   if (e.key === 'Enter') loadWeather();
 });
