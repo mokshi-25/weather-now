@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Weather Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <h1>🌤️ Weather Dashboard</h1>
+    <p class="subtitle">Type a city to see the weather now and the next 5 days.</p>
+
+    <div class="search">
+      <input id="city" type="text" placeholder="e.g. Hyderabad" value="Hyderabad">
+      <button id="search-btn">Search</button>
+    </div>
+
+    <div id="message" class="message"></div>
+    <section id="current"></section>
+    <section id="forecast" class="forecast"></section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
